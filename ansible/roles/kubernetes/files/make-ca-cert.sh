@@ -94,16 +94,26 @@ octets=($(echo "${service_range}" | sed -e 's|/.*||' -e 's/\./ /g'))
 service_ip=$(echo "${octets[*]}" | sed 's/ /./g')
 
 # Determine appropriete subject alt names
+etcd_sans="IP:${cert_ip},DNS:${master_name}"
 sans="IP:${cert_ip},IP:${service_ip},DNS:kubernetes,DNS:kubernetes.default,DNS:kubernetes.default.svc,DNS:kubernetes.default.svc.${dns_domain},DNS:${master_name}"
 
 curl -sSL -O https://storage.googleapis.com/kubernetes-release/easy-rsa/easy-rsa.tar.gz
 tar xzf easy-rsa.tar.gz
 cd easy-rsa-master/easyrsa3
 
+# Since easyrsa3 does not support creating certs with both clientAuth and
+# serverAuth (which is required for etcd peer certificates), create a new type
+# for this purpose.
+sed 's/extendedKeyUsage.*$/extendedKeyUsage = serverAuth,clientAuth/' x509-types/server > x509-types/client-server
+
 # Sadly, openssl is very verbose to std*err* with no option to turn it off.
 if ! (./easyrsa --batch init-pki
       ./easyrsa --batch "--req-cn=${cert_ip}@$(date +%s)" build-ca nopass
       ./easyrsa --batch --subject-alt-name="${sans}" build-server-full "${master_name}" nopass
+      ./easyrsa --batch --subject-alt-name="${etcd_sans}" build-server-full etcd_server nopass
+      ./easyrsa --batch gen-req etcd_peer nopass
+      ./easyrsa --batch --subject-alt-name="${etcd_sans}" sign-req client-server etcd_peer nopass
+      ./easyrsa --batch build-client-full etcd_client nopass
       ./easyrsa --batch build-client-full kubelet nopass
       ./easyrsa --batch build-client-full kubecfg nopass) >/dev/null 2>&1; then
     echo "=== Failed to generate certificates: Aborting ===" 1>&2
@@ -119,8 +129,12 @@ cp -p pki/issued/kubecfg.crt "${cert_dir}/kubecfg.crt"
 cp -p pki/private/kubecfg.key "${cert_dir}/kubecfg.key"
 cp -p pki/issued/kubelet.crt "${cert_dir}/kubelet.crt"
 cp -p pki/private/kubelet.key "${cert_dir}/kubelet.key"
+cp -p pki/issued/etcd_peer.crt "${cert_dir}/etcd_peer.crt"
+cp -p pki/private/etcd_peer.key "${cert_dir}/etcd_peer.key"
 
-CERTS=("ca.crt" "server.key" "server.crt" "kubelet.key" "kubelet.crt" "kubecfg.key" "kubecfg.crt")
+# TODO: copy etcd server and peer certs to the appropriate directory
+
+CERTS=("ca.crt" "server.key" "server.crt" "kubelet.key" "kubelet.crt" "kubecfg.key" "kubecfg.crt" "etcd_peer.crt" "etcd_peer.key")
 for cert in "${CERTS[@]}"; do
   chgrp "${cert_group}" "${cert_dir}/${cert}"
   chmod 660 "${cert_dir}/${cert}"

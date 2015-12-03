@@ -37,6 +37,7 @@ master_name="${MASTER_NAME:="kubernetes"}"
 service_range="${SERVICE_CLUSTER_IP_RANGE:="10.0.0.0/16"}"
 dns_domain="${DNS_DOMAIN:="cluster.local"}"
 cert_dir="${CERT_DIR:-"/srv/kubernetes"}"
+etcd_cert_dir="${CERT_DIR:-"/srv/etcd"}"
 cert_group="${CERT_GROUP:="kube-cert"}"
 
 # The following certificate pairs are created:
@@ -129,10 +130,13 @@ cp -p pki/issued/kubecfg.crt "${cert_dir}/kubecfg.crt"
 cp -p pki/private/kubecfg.key "${cert_dir}/kubecfg.key"
 cp -p pki/issued/kubelet.crt "${cert_dir}/kubelet.crt"
 cp -p pki/private/kubelet.key "${cert_dir}/kubelet.key"
-cp -p pki/issued/etcd_peer.crt "${cert_dir}/etcd_peer.crt"
-cp -p pki/private/etcd_peer.key "${cert_dir}/etcd_peer.key"
+cp -p pki/issued/etcd_client.crt "${cert_dir}/etcd_client.crt"
+cp -p pki/private/etcd_client.key "${cert_dir}/etcd_client.key"
 
-# TODO: copy etcd server and peer certs to the appropriate directory
+cp -p pki/issued/etcd_server.crt "${etcd_cert_dir}/etcd_server.crt"
+cp -p pki/private/etcd_server.key "${etcd_cert_dir}/etcd_server.key"
+cp -p pki/issued/etcd_peer.crt "${etcd_cert_dir}/etcd_peer.crt"
+cp -p pki/private/etcd_peer.key "${etcd_cert_dir}/etcd_peer.key"
 
 CERTS=("ca.crt" "server.key" "server.crt" "kubelet.key" "kubelet.crt" "kubecfg.key" "kubecfg.crt" "etcd_peer.crt" "etcd_peer.key")
 for cert in "${CERTS[@]}"; do
